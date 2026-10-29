@@ -3,6 +3,7 @@
 import os
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TypeVar
 
 import httpx
@@ -14,9 +15,43 @@ T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_MODELS = {"ollama": "gemma4:e2b", "openai": "gpt-6-luna"}
 PROVIDERS = tuple(DEFAULT_MODELS)
+MODEL_CHOICES = [("ollama", "gemma4:e2b"), ("openai", "gpt-6-luna"), ("openai", "gpt-4o-mini")]  # the UI's model picker
 # $ per 1M (input, output) tokens, from third-party listings (Oct 2026); check https://developers.openai.com/api/docs/pricing.
 # Override with LLM_PRICE_INPUT / LLM_PRICE_OUTPUT. Local Ollama models cost 0.
 PRICES = {"gpt-6-luna": (0.10, 0.50), "gpt-4o-mini": (0.15, 0.60)}
+
+
+PROMPT_OVERHEAD = 1_000  # system prompt + question + passage headers, rounded up
+MAX_USEFUL_BUDGET = 64_000  # beyond this, more passages mostly add noise, latency and cost
+
+
+@dataclass(frozen=True)
+class ContextProfile:
+    """How much retrieved text to send a model, and how much room to leave for its answer."""
+
+    context_window: int  # tokens the model accepts (for Ollama: the num_ctx we request)
+    budget: int  # default tokens of passages per question
+    k: int  # default passages retrieved (per company when balanced)
+    output_reserve: int  # tokens kept for the answer (also caps Ollama's output)
+
+    @property
+    def max_budget(self) -> int:
+        """Largest passage budget that still fits the window, capped where extra context stops helping."""
+        return max(1_000, min(self.context_window - self.output_reserve - PROMPT_OVERHEAD, MAX_USEFUL_BUDGET))
+
+
+# gemma4:e2b is a 2B model: long prompts dilute it and Ollama's memory grows with num_ctx, so keep it small.
+# gpt-6-luna takes 1.1M tokens, but ~24k (3 companies x 8 passages x ~800 tokens) covers comparisons for ~$0.003.
+PROFILES = {
+    "gemma4:e2b": ContextProfile(context_window=16_384, budget=8_000, k=5, output_reserve=1_024),
+    "gpt-6-luna": ContextProfile(context_window=1_100_000, budget=24_000, k=8, output_reserve=4_000),
+    "gpt-4o-mini": ContextProfile(context_window=128_000, budget=16_000, k=6, output_reserve=2_000),
+}
+DEFAULT_PROFILE = ContextProfile(context_window=16_384, budget=8_000, k=5, output_reserve=1_024)  # unknown models
+
+
+def context_profile(model: str) -> ContextProfile:
+    return PROFILES.get(model, DEFAULT_PROFILE)
 
 
 class Usage(BaseModel):
@@ -94,13 +129,15 @@ class OllamaChat(ChatModel):
         self,
         model: str = DEFAULT_MODELS["ollama"],
         base_url: str = OLLAMA_URL,
-        num_ctx: int = 16384,
+        num_ctx: int | None = None,
         think: bool = False,
         temperature: float = 0.0,
         timeout: float = 600.0,
     ):
+        profile = context_profile(model)
         self.model = model
-        self.num_ctx = num_ctx  # Ollama's default window (4k) would silently truncate our passages
+        self.num_ctx = num_ctx or profile.context_window  # Ollama's default (4k) would silently truncate passages
+        self.num_predict = profile.output_reserve
         self.think = think
         self.temperature = temperature
         self.client = httpx.Client(base_url=base_url, timeout=timeout)
@@ -113,7 +150,7 @@ class OllamaChat(ChatModel):
                 "stream": False,
                 "think": self.think,
                 "format": schema.model_json_schema(),
-                "options": {"temperature": self.temperature, "num_ctx": self.num_ctx},
+                "options": {"temperature": self.temperature, "num_ctx": self.num_ctx, "num_predict": self.num_predict},
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             },
         )
@@ -152,3 +189,20 @@ def get_chat_model(provider: str | None = None, model: str | None = None) -> Cha
     if provider == "openai":
         return OpenAIChat(model=model)
     raise ValueError(f"unknown LLM provider {provider!r} (expected one of {PROVIDERS})")
+
+
+def model_choices() -> list[tuple[str, str]]:
+    """(provider, model) pairs to offer, plus $LLM_PROVIDER / $LLM_MODEL if set to something not listed."""
+    choices = list(MODEL_CHOICES)
+    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
+    env = (provider, os.environ.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, ""))
+    if env[1] and env not in choices:
+        choices.append(env)
+    return choices
+
+
+def default_choice(choices: list[tuple[str, str]]) -> int:
+    """Index of the choice matching $LLM_PROVIDER / $LLM_MODEL (default: local gemma)."""
+    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
+    wanted = (provider, os.environ.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, ""))
+    return choices.index(wanted) if wanted in choices else 0

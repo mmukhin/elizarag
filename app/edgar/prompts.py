@@ -4,10 +4,12 @@
 """
 
 import os
+import re
 from pathlib import Path
 from string import Template
 
 PROMPT_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
+NOTES = re.compile(r"<!--.*?-->\s*", re.DOTALL)  # iteration notes for humans, never sent to the model
 
 
 def prompt_version() -> str:
@@ -21,5 +23,6 @@ def prompt_path(name: str) -> Path:
 
 
 def load_prompt(name: str, **values: str) -> str:
-    """Read `prompts/<name>.md` and substitute `$placeholders`; a missing value raises KeyError."""
-    return Template(prompt_path(name).read_text(encoding="utf-8")).substitute(values).strip()
+    """Read `prompts/<name>.md`, drop `<!-- notes -->`, and substitute `$placeholders`; a missing value raises KeyError."""
+    text = NOTES.sub("", prompt_path(name).read_text(encoding="utf-8"))
+    return Template(text).substitute(values).strip()

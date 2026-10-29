@@ -7,7 +7,7 @@ Years are matched against `fiscal_year` (year of the period end); quarters are c
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from app.edgar.vectorstore import Filters
@@ -109,3 +109,32 @@ def parse_filters(
     if TEN_Q.search(question):
         filing_types.add("10-Q")
     return Filters(tickers, years, filing_types, quarters)
+
+
+@dataclass(frozen=True)
+class ResolvedFilters:
+    filters: Filters  # what the search uses
+    detected: Filters  # what the question implies
+    overridden: dict[str, tuple[list, list]]  # field -> (detected, explicit) where an explicit choice replaced the question's
+
+
+def resolve_filters(
+    question: str,
+    companies: Iterable[Company],
+    years_by_ticker: Mapping[str, Iterable[int]] | None = None,
+    explicit: Filters | None = None,
+    detect: bool = True,
+) -> ResolvedFilters:
+    """The filters a search should use: explicit choices (sidebar, CLI flags) win per field over the question's.
+
+    The UI and `ask.py` both call this, so the evals test the same path users take.
+    """
+    explicit = explicit or Filters()
+    detected = parse_filters(question, companies, years_by_ticker) if detect else Filters()
+    merged, overridden = {}, {}
+    for name, mine in asdict(explicit).items():
+        theirs = getattr(detected, name)
+        merged[name] = mine or theirs
+        if mine and theirs and set(mine) != set(theirs):
+            overridden[name] = (list(theirs), list(mine))
+    return ResolvedFilters(Filters(**merged), detected, overridden)

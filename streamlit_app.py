@@ -10,8 +10,10 @@ from app.ui import render
 load_env()
 
 
-@st.cache_resource(show_spinner="Loading collection from Chroma...")
-def load_retriever(collection: str) -> HybridRetriever:
+@st.cache_resource(show_spinner="Loading collection from Chroma...", max_entries=2)
+def load_retriever(collection: str, version: tuple[str, int]) -> HybridRetriever:
+    """Cached per collection *version* (id, chunk count): a rebuild or an index still being written gets reloaded,
+    so BM25 and company detection never run on a stale copy while vector search sees the live collection."""
     return HybridRetriever(load_store(collection, get_embeddings(), get_client()))
 
 
@@ -27,4 +29,5 @@ if not collections:
 
 default = collections.index("10k") if "10k" in collections else 0
 collection = st.sidebar.selectbox("Collection", collections, index=default)
-render(load_retriever(collection))
+live = get_client().get_collection(collection)
+render(load_retriever(collection, (str(live.id), live.count())))

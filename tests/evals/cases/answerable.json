@@ -87,7 +87,7 @@
     "id": "nflx-streaming-revenue",
     "question": "What were Netflix's streaming revenues in 2025, and how much did they grow?",
     "chunk_ids": ["NFLX_10K_2026-01-23_full.txt#28", "NFLX_10K_2026-01-23_full.txt#30"],
-    "expect": {"status": ["answered"], "tickers": ["NFLX"], "must_mention": ["45", "16"], "gold_chunk_ids": ["NFLX_10K_2026-01-23_full.txt#28"]}
+    "expect": {"status": ["answered"], "tickers": ["NFLX"], "must_mention": ["45", "16"], "gold_chunk_ids": ["NFLX_10K_2026-01-23_full.txt#28", "NFLX_10K_2026-01-23_full.txt#30"]}
   },
   {
     "id": "ko-revenue-2024",

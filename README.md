@@ -1,31 +1,92 @@
 # Eliza — SEC EDGAR RAG prototype
 
-Chunk, embed and search 10-K filings from `data/edgar_corpus/` so a chatbot can answer cross-company questions such as:
+A chatbot that answers cross-company questions about SEC 10-K (and 10-Q) filings, grounded in and citing the filings themselves:
 
 - *What are the primary risk factors facing Apple, Tesla and JPMorgan, and how do they compare?*
 - *How has NVIDIA's revenue and growth outlook changed over the last two years?*
 - *What regulatory risks do the major pharmaceutical companies face, and how are they addressing them?*
 
-Pipeline: **load + clean → chunk (800 tokens) → embed (EmbeddingGemma) → ChromaDB (local server) → filters parsed from the question → hybrid (BM25 + vector) search → grounded LLM answer (structured JSON) → Streamlit UI**.
+Pipeline: **load + clean → chunk (800 tokens) → embed (EmbeddingGemma) → ChromaDB (local server) → filters parsed from the question → hybrid (BM25 + vector) search → grounded LLM answer (structured JSON, cited) → Streamlit UI**.
 
-## Setup
+Everything runs locally by default (Ollama for embeddings and the LLM); OpenAI is optional.
 
-Requires Python 3.12 and, for the default embedding backend, [Ollama](https://ollama.com) running locally.
+## Install
 
-**Corpus (not in this repo):** put the SEC filings (`<TICKER>_<10K|10Q>_..._full.txt`, public-domain text from [EDGAR](https://www.sec.gov/edgar/)) in `data/edgar_corpus/`. Without it, indexing and the chunking tests and generation evals can't run; those tests are skipped.
+1. **Python 3.12** (pinned in `.tool-versions`; with asdf, prefix commands with `ASDF_PYTHON_VERSION=3.12.10` if `python3` errors out).
+2. **Python packages:**
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+3. **[Ollama](https://ollama.com)**, running, with the two default models:
+   ```bash
+   ollama pull embeddinggemma   # embeddings (768-dim)
+   ollama pull gemma4:e2b       # answer generation
+   ```
+4. **Corpus (not in this repo):** put the SEC filings (`<TICKER>_<10K|10Q>_..._full.txt`, public-domain text from [EDGAR](https://www.sec.gov/edgar/)) in `data/edgar_corpus/`. Without it, indexing, the chunking tests and the generation evals are skipped.
+5. **Optional, OpenAI:** put `OPENAI_API_KEY=sk-...` in `.env` in the project root (git-ignored). Read by the UI, scripts and evals.
 
-**Secrets:** put `OPENAI_API_KEY=sk-...` in a `.env` file in the project root (git-ignored). It's read by the UI, the scripts and the evals.
+## Run it
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-ollama pull embeddinggemma      # default embedding model (768-dim)
-
-chroma run --path data/chroma   # local Chroma server on http://localhost:8000; keep it running
+chroma run --path data/chroma                              # Chroma server on :8000; keep it running
+python3 scripts/build_index.py --tickers AAPL TSLA JPM     # once (~5 min); all 89 10-Ks: drop --tickers (~50 min)
+streamlit run streamlit_app.py                              # http://localhost:8501
 ```
 
-The scripts and the UI talk to this server (`CHROMA_URL`, default `http://localhost:8000`). Data persists in `data/chroma/`.
+In the UI, tick **Generate answer with LLM** in the sidebar. From the command line:
+
+```bash
+python3 scripts/ask.py "Compare the main risk factors of Apple and Tesla" -k 3   # structured JSON on stdout
+```
+
+## Tests and evals
+
+| What | Command | Needs |
+|---|---|---|
+| Code tests (offline, deterministic) | `pytest` | nothing |
+| Live integration tests | `pytest -m slow` | Ollama + `embeddinggemma` + `gemma4:e2b` |
+| All evals | `pytest -m eval` | Ollama + `gemma4:e2b`; retrieval suite also needs the `10k` collection |
+| One eval suite | `pytest -m eval tests/evals/test_generation.py` | as above |
+| Evals against another model | `LLM_MODEL=gemma4:e4b pytest -m eval` or `LLM_PROVIDER=openai pytest -m eval` | that model / `OPENAI_API_KEY` |
+| Evals against a prompt version | `PROMPT_VERSION=v2 pytest -m eval tests/evals/test_generation.py` | as above |
+| Compare prompt versions | `python3 scripts/compare_prompts.py --cases` | eval result files |
+
+Each eval run prints pass rates per suite and per check, and writes `tests/evals/results/<timestamp>-<prompt version>.json`. Evals measure quality, not correctness, so some failures are expected and tracked as pass rates.
+
+Baseline, `gemma4:e2b` on 2026-10-28: answerable 13/16, off_topic 6/10, not_in_passages 9/10, retrieval 8/9, filters 17/19 (2 xfail). Typical failures: answers without citations, a cited passage number that doesn't exist, and off-topic questions refused correctly but labelled `not_in_passages`.
+
+### Iterating on prompts
+
+The live prompts are `prompts/qa_system.md` and `prompts/qa_user.md`. Each iteration is a snapshot in `prompts/versions/<vN>/`, with notes at the top of the file in an HTML comment block (what changed, why, eval result). `load_prompt` strips `<!-- ... -->` blocks, so the model never sees the notes.
+
+1. Copy the latest version to `prompts/versions/vN+1/`, edit it, and write the notes.
+2. `PROMPT_VERSION=vN+1 pytest -m eval tests/evals/test_generation.py`
+3. `python3 scripts/compare_prompts.py --cases` for a Markdown table of every version side by side, plus pass/fail per case.
+4. Copy the winner over `prompts/qa_system.md` to make it live.
+
+## Commands
+
+| Task | Command |
+|---|---|
+| Build an index for a few companies | `python3 scripts/build_index.py --tickers AAPL TSLA JPM --collection demo` |
+| Build an index for all 89 10-Ks (collection `10k`) | `python3 scripts/build_index.py` |
+| Build an index with 10-Ks and 10-Qs | `python3 scripts/build_index.py --filing-types 10-K 10-Q --collection filings` |
+| Build verbosely (per-filing details + one line per Ollama request) | `python3 scripts/build_index.py -v` |
+| Change how often progress is logged (chunks per batch, default 128) | `python3 scripts/build_index.py --batch-size 50` |
+| Import an old `InMemoryVectorStore` JSON dump (reuses its vectors) | `python3 scripts/import_json_index.py data/index/10k.json` |
+| Query a collection | `python3 scripts/query.py "supply chain risks" --collection demo --tickers AAPL --years 2025 --quarters 3 -k 3` |
+| Ask a question, get structured JSON (filters come from the question) | `python3 scripts/ask.py "Compare the main risk factors of Apple and Tesla" --collection demo -k 3` |
+| Same, with the passage text in the JSON | `python3 scripts/ask.py "..." --with-text` |
+| Same, with OpenAI | `LLM_PROVIDER=openai python3 scripts/ask.py "..." --collection demo` |
+| Print chunks by id (rebuilt from the corpus, no Chroma) | `python3 scripts/show_chunk.py AAPL_10K_2025-10-31_full.txt#8` |
+| Regenerate `data/companies.json` (names, aliases) | `python3 scripts/build_companies.py` |
+| Chunk stats for all 10-Ks | `python3 scripts/chunk_report.py` |
+| Chunk stats + sample chunks for chosen files | `python3 scripts/chunk_report.py --samples data/edgar_corpus/AAPL_10K_2025-10-31_full.txt` |
+| UI tests only | `pytest tests/unit/test_ui.py` |
+| Hybrid search tests only | `pytest tests/unit/test_hybrid.py` |
+
+Measured on a local Ollama: 1,515 chunks (AAPL + TSLA + JPM, 9 filings) embed in about 4.5 minutes (~5.4 chunks/s), so the full corpus (16,005 chunks) takes roughly 50 minutes. The default collection is `10k`; rebuilding a collection replaces it.
 
 | View the data | URL |
 |---|---|
@@ -33,45 +94,19 @@ The scripts and the UI talk to this server (`CHROMA_URL`, default `http://localh
 | Chroma REST API (Swagger) | http://localhost:8000/docs |
 | List collections (JSON) | http://localhost:8000/api/v2/tenants/default_tenant/databases/default_database/collections |
 
-> The repo has no pinned Python. If you use asdf and `python3` errors out, prefix commands with `ASDF_PYTHON_VERSION=3.12.10`.
+The scripts and the UI talk to the Chroma server at `CHROMA_URL` (default `http://localhost:8000`). Data persists in `data/chroma/`.
 
-## Commands
+---
 
-| Task | Command |
-|---|---|
-| Code tests (offline, no Ollama needed) | `pytest` (same as `pytest tests/unit`) |
-| Live integration tests (needs Ollama + `embeddinggemma` + `gemma4:e2b`) | `pytest -m slow` |
-| Evals (needs Ollama + `gemma4:e2b`; retrieval suite also needs the `10k` collection) | `pytest -m eval` |
-| Evals against another model | `LLM_MODEL=gemma4:e4b pytest -m eval` or `LLM_PROVIDER=openai pytest -m eval` |
-| One eval suite | `pytest -m eval tests/evals/test_filters.py` |
-| Print chunks by id (rebuilt from the corpus, no Chroma) | `python3 scripts/show_chunk.py AAPL_10K_2025-10-31_full.txt#8` |
-| Regenerate `data/companies.json` (names, aliases) | `python3 scripts/build_companies.py` |
-| Chunk stats for all 10-Ks | `python3 scripts/chunk_report.py` |
-| Chunk stats + sample chunks for chosen files | `python3 scripts/chunk_report.py --samples data/edgar_corpus/AAPL_10K_2025-10-31_full.txt` |
-| Build an index for a few companies | `python3 scripts/build_index.py --tickers AAPL TSLA JPM --collection demo` |
-| Build an index for all 89 10-Ks (collection `10k`) | `python3 scripts/build_index.py` |
-| Build an index with 10-Ks and 10-Qs | `python3 scripts/build_index.py --filing-types 10-K 10-Q --collection filings` |
-| Import an old `InMemoryVectorStore` JSON dump (reuses its vectors) | `python3 scripts/import_json_index.py data/index/10k.json` |
-| Build verbosely (per-filing details + one line per Ollama request) | `python3 scripts/build_index.py -v` |
-| Change how often progress is logged (chunks per batch, default 128) | `python3 scripts/build_index.py --batch-size 50` |
-| Query a collection | `python3 scripts/query.py "supply chain risks" --collection demo --tickers AAPL --years 2025 --quarters 3 -k 3` |
-| Ask a question, get structured JSON (local gemma; filters come from the question) | `python3 scripts/ask.py "Compare the main risk factors of Apple and Tesla" --collection demo -k 3` |
-| Same, with the passage text in the JSON | `python3 scripts/ask.py "..." --with-text` |
-| Same, with OpenAI | `LLM_PROVIDER=openai OPENAI_API_KEY=sk-... python3 scripts/ask.py "..." --collection demo` |
-| Launch the Q&A web UI | `streamlit run streamlit_app.py` |
-| UI tests only | `pytest tests/unit/test_ui.py` |
-| Hybrid search tests only | `pytest tests/unit/test_hybrid.py` |
-
-Measured on a local Ollama: 1,515 chunks (AAPL + TSLA + JPM, 9 filings) embed in about 4.5 minutes (~5.4 chunks/s), so the full corpus (16,005 chunks) takes roughly 50 minutes. The default collection is `10k`; rebuilding a collection replaces it.
+# Reference
 
 ## Q&A UI and hybrid search
 
-```bash
-python3 scripts/build_index.py --tickers AAPL TSLA JPM   # once; writes Chroma collection 10k by default
-streamlit run streamlit_app.py                            # http://localhost:8501
-```
+Type a question and press Enter. The page shows the most relevant filing passages and, with **Generate answer with LLM** ticked, a grounded answer.
 
-Type a question and press Enter. The page shows the most relevant filing passages (it retrieves, it does not generate an answer). The sidebar picks the Chroma collection, search mode, results count and metadata filters.
+The sidebar has two parts:
+- **Answer / Context** (top): one **Model** picker (`ollama: gemma4:e2b`, `openai: gpt-6-luna`, `openai: gpt-4o-mini`, plus `$LLM_PROVIDER`/`$LLM_MODEL` if set to something else). Picking a model immediately updates the context-window info and resets *passages per company* and the *token budget* to that model's defaults (see [Context budget per model](#answer-generation)), without re-running the question.
+- **Search** (a form): mode, companies, balance, years, filing type, quarters, filter detection. These take effect when you press **Apply and re-run**, which re-runs the current question with all settings.
 
 | Mode | How it ranks |
 |---|---|
@@ -83,7 +118,9 @@ Type a question and press Enter. The page shows the most relevant filing passage
 - **Balance across selected companies** (on by default when 2+ companies are selected or detected) retrieves *k* passages per company instead of *k* overall, so one company can't crowd out the rest in comparison questions.
 - Each result shows its fused score and its rank in each ranker (`vector #2 · keyword #1`).
 - **Retrieval** shows, per search (one per company when balanced), the top-k and the exact requests: the Chroma `collection.query` (collection, text that gets embedded, `n_results`, `where` filter) and the BM25 query (tokens, filter, corpus size).
-- Below the answer the page splits the results into **passages sent to the LLM** (with tokens used of the 8,000 budget), **top-k passages not sent** (cut by the token budget) and **candidates not used** (ranked below top-k), with each one's vector/BM25 rank, cosine and BM25 scores, RRF score and token cost.
+- Below the answer, every section is a collapsible header: **Retrieval** (collapsed), **passages sent to the LLM** (open, with tokens used of the budget; each passage is its own expander and the cited ones are open), **top-k passages not sent** (cut by the token budget) and **candidates not used** (ranked below top-k), with each one's vector/BM25 rank, cosine and BM25 scores, RRF score and token cost. Each `[n]` in the answer links to passage n and highlights it.
+- **Example questions** (collapsed above the question box) fill in the assignment's sample questions. With generation on, the page shows tokens sent/received, cost and LLM latency, the answer, key points with citations, any warnings, the structured JSON, and the numbered passages `[n]` the model saw. If generation fails (Ollama stopped, no API key), the error is shown and the passages are still displayed.
+- If the sidebar's Companies (or years…) contradict the question, a warning says which one is used; a company the question names that isn't in the collection is reported instead of silently searching everything.
 - The UI loads whichever collection the provider in `EMBEDDING_PROVIDER` can query, so start it with the same provider you built with.
 
 Code: `app/edgar/hybrid.py` (`HybridRetriever`), `app/ui.py` (`render`), `streamlit_app.py` (entry point).
@@ -113,9 +150,20 @@ python3 scripts/ask.py "What tariff risks do Apple and Tesla face?" --collection
 
 The model itself returns only `status`, `answer`, `claims[{text, passages[]}]` and `caveats`: passage *numbers* and judgements, never passage content. The prompt labels passages `[1]..[n]` because small models copy short numbers reliably and mangle long ids; code maps the numbers to chunk ids.
 
-**Guard rails** applied after the model answers: citations to passages that don't exist are removed and reported, uncited claims and uncited `answered`/`partial` answers are flagged, and an `off_topic` or `not_in_passages` answer that still makes claims is flagged. Passages are fitted to a token budget (default 8,000) taking each company's best passage first, so one company can't push another out; dropped passages are reported. With no retrieved passages the model is not called at all.
+**Context budget per model** (`app/edgar/llm.py::PROFILES`). How much retrieved text to send depends on the model:
 
-**Prompts** live in [`prompts/`](prompts/) as plain Markdown, loaded by `app/edgar/prompts.py` (`$question`, `$context` placeholders): `qa_system.md` (grounding rules and output contract) and `qa_user.md` (passages + question). Edit them without touching code.
+| Model | Context window | Passage budget (default) | Passages per company (k) | Reserved for the answer |
+|---|---|---|---|---|
+| `gemma4:e2b` | 16,384 (the `num_ctx` we request) | 8,000 | 5 | 1,024 (also Ollama's `num_predict`) |
+| `gpt-6-luna` | ~1.1M | 24,000 | 8 | 4,000 |
+| `gpt-4o-mini` | 128k | 16,000 | 6 | 2,000 |
+| other models | 16,384 (assumed) | 8,000 | 5 | 1,024 |
+
+A 2B model gets worse as the prompt grows, so gemma gets ~9 passages. gpt-6-luna could take 1.1M tokens, but ~24k (3 companies × 8 passages × ~800 tokens) covers comparison questions for about $0.003; more mostly adds noise, latency and "lost in the middle" risk. The sidebar shows the window and reserve, lets you change k and the budget (up to the window minus the reserve and ~1k of prompt, capped at 64k), and estimates how many passages fit. `ask.py` uses the same defaults unless `-k` / `--max-context-tokens` are given.
+
+**Guard rails** applied after the model answers: citations to passages that don't exist are removed and reported, uncited claims and uncited `answered`/`partial` answers are flagged, and an `off_topic` or `not_in_passages` answer that still makes claims is flagged. Passages are fitted to the model's token budget (gemma 8,000, gpt-6-luna 24,000) taking each company's best passage first, so one company can't push another out; dropped passages are reported. With no retrieved passages the model is not called at all.
+
+**Prompts** live in [`prompts/`](prompts/) as plain Markdown, loaded by `app/edgar/prompts.py` (`$question`, `$context` placeholders): `qa_system.md` (grounding rules and output contract) and `qa_user.md` (passages + question). Edit them without touching code. `PROMPT_VERSION=vN` loads `prompts/versions/vN/` instead (see [Iterating on prompts](#iterating-on-prompts)).
 
 ### LLM providers
 
@@ -128,14 +176,13 @@ The model itself returns only `status`, `answer`, `claims[{text, passages[]}]` a
 | `OLLAMA_URL` | Ollama base URL | `http://localhost:11434` |
 | `OPENAI_API_KEY` | required for `openai`; read from `.env` in the project root if not set in the shell | — |
 | `LLM_PRICE_INPUT` / `LLM_PRICE_OUTPUT` | $ per 1M tokens, for models missing from `llm.PRICES` | — |
+| `PROMPT_VERSION` | prompt snapshot in `prompts/versions/` | live `prompts/` |
 
-- **Ollama** is called on `/api/chat` with the JSON schema as `format`, `temperature: 0`, `think: false` (faster) and `num_ctx: 16384`. Ollama's default 4k window would otherwise silently cut off the passages.
+- **Ollama** is called on `/api/chat` with the JSON schema as `format`, `temperature: 0`, `think: false` (faster) and `num_ctx` / `num_predict` from the model's context profile (16,384 / 1,024 for gemma). Ollama's default 4k window would otherwise silently cut off the passages.
 - **OpenAI** uses LangChain `ChatOpenAI.with_structured_output(schema, include_raw=True)` (the raw message carries token usage). No `temperature` is sent unless you pass one, because `gpt-6-luna` accepts only the default.
 - Every call records **usage**: tokens sent and received, latency and cost, summed over retries. It's in `QAResult.usage` and shown under the answer in the UI. Prices come from `llm.PRICES` (gpt-6-luna $0.10 / $0.50, gpt-4o-mini $0.15 / $0.60 per 1M input / output tokens, from third-party listings, Oct 2026); local Ollama is $0.
 - Output that fails schema validation is retried once, then raises `StructuredOutputError`.
 - To add a provider, subclass `ChatModel` and implement `_complete(system, user, schema)`, then add a branch to `get_chat_model`.
-
-In the UI, tick **Generate answer with LLM** in the sidebar and choose the provider and model. **Example questions** (collapsed above the question box) fill in the assignment's sample questions. The page shows tokens sent/received, cost and LLM latency, the answer, key points with citations, any warnings, the structured JSON, and the numbered passages `[n]` the model saw. If generation fails (Ollama stopped, no API key), the error is shown and the passages are still displayed. **Show retrieval details** and **Show passages** toggles hide the two sections below the answer.
 
 ## Filters from the question
 
@@ -149,6 +196,8 @@ In the UI, tick **Generate answer with LLM** in the sidebar and choose the provi
 | `latest`, `most recent`, `last two years` | the newest year(s) indexed for each named company |
 | `Q2`, `2024Q2`, `third quarter` | `quarters` |
 | `10-K`, `annual report` / `10-Q`, `quarterly` | `filing_types` |
+
+`resolve_filters` merges the question's filters with explicit ones (sidebar, CLI flags; explicit wins per field) and reports conflicts: the UI warns when, say, the question names NVDA but the sidebar says BA. Companies are detected against **all** of `data/companies.json`, not just the indexed ones, so a company missing from the collection is reported instead of silently falling back to an unfiltered search. The UI caches the loaded collection per collection id and chunk count, so a rebuilt (or still-building) index is reloaded rather than detecting against a stale company list.
 
 `data/companies.json` is generated by `scripts/build_companies.py` from the filing headers plus a hand-curated alias table in that script. **Ambiguous aliases** (Apple, Target, Visa, Oracle, Meta, Chase, Coke…) match only when capitalised, so "apple pie" and "sales target" don't filter.
 
@@ -167,7 +216,7 @@ In the UI, tick **Generate answer with LLM** in the sidebar and choose the provi
 
 ```bash
 # external API example
-EMBEDDING_PROVIDER=openai OPENAI_API_KEY=sk-... python3 scripts/build_index.py --collection openai
+EMBEDDING_PROVIDER=openai python3 scripts/build_index.py --collection openai
 ```
 
 Vectors from different providers are not comparable. Build the collection and query it with the same provider. To add another provider, add a branch in `get_embeddings` that returns any LangChain `Embeddings`.
@@ -206,7 +255,7 @@ search(store, query, k, Filters(tickers=…, fiscal_years=…, filing_types=…,
 | Median chunk | ~750 tokens |
 | Examples (chunks) | AAPL ~78, TSLA ~145, NVDA 111–125, PFE ~300, JPM ~593 |
 
-## Tests and evals
+## Test and eval details
 
 ```
 tests/
@@ -223,13 +272,13 @@ tests/
 | `test_chunking.py` | AAPL, TSLA, JPM: header metadata, noise removal, chunk size limit, offsets and coverage, known content present, determinism; header parsing, cleaning, calendar quarter |
 | `test_hybrid.py` | Tokenizer, BM25/vector/hybrid ranking with hand-set vectors (fusion, keyword-only and vector-only hits), filters in every mode incl. quarter, per-company balancing, blank query, empty store |
 | `test_ui.py` | Streamlit `AppTest`: generated answer, claims, JSON (no passage text), LLM-failure fallback, generation toggle, results and rank captions, sidebar filters, filters detected from the question (and sidebar override), balanced comparison, keyword mode, no-results warning, backend-down error |
-| `test_qa.py` | Prompt loading, context numbering and chunk ids, token-budget selection, validation per status (incl. off-topic), claim → chunk id/ticker resolution, `answer_question` with a scripted model |
+| `test_qa.py` | Prompt loading (notes stripped for every version), context numbering and chunk ids, token-budget selection, validation per status (incl. off-topic), claim → chunk id/ticker resolution, `answer_question` with a scripted model |
 | `test_llm.py` | Structured-output retry/raise, Ollama request payload via mocked HTTP, OpenAI path with a fake client, provider selection |
 | `test_vectorstore.py` | Search ranking, `Filters` → Chroma `where` and the BM25 predicate (kept in sync), build/reload a collection, precomputed vectors, EmbeddingGemma prefixes and batching |
-| `test_query_filters.py` | `parse_filters` table: aliases, ambiguous words, ticker vs word, question order, years, ranges, relative years, quarters, filing types |
+| `test_query_filters.py` | `parse_filters` table: aliases, ambiguous words, ticker vs word, question order, years, ranges, relative years, quarters, filing types; every company's name, aliases and ticker select only that company; every pair of companies; `resolve_filters` overrides and conflicts |
 | `test_scorers.py` | The eval scorers on hand-made results, and that every eval case file is well formed (chunk ids exist) |
 
-**Evals** (`tests/evals/`) measure quality instead of correctness, so failures are expected and tracked as pass rates. Generation evals **pin their passages by chunk id** and rebuild them from `data/edgar_corpus/` (chunking is deterministic), so they need only the LLM, not a built index, and don't shift when retrieval changes.
+Generation evals **pin their passages by chunk id** and rebuild them from `data/edgar_corpus/` (chunking is deterministic), so they need only the LLM, not a built index, and don't shift when retrieval changes.
 
 | Suite (`cases/*.json`) | What | Checks |
 |---|---|---|
@@ -237,11 +286,10 @@ tests/
 | `off_topic` (10) | recipes ("apple pie" with Apple passages), weather, code, trivia, prompt injection | `status=off_topic`, no claims or citations, doesn't do the task |
 | `not_in_passages` (10) | company not in corpus, year/figure missing, one of two companies, false premise, future prediction | status, caveat, no invented figures |
 | `retrieval` (9) | questions against the `10k` collection (cases for tickers not indexed are skipped) | expected chunk in top-k; per-company recall when balanced |
+| `company_purity` (54) | for every company in `data/companies.json`: "How has {name}'s revenue … last two years?" and "What are the main risk factors {name} describes?", run question → `resolve_filters` → hybrid search exactly like the UI | every passage belongs to that company (records unfiltered purity too: 0.92 on average, IBM 0.3, so the filter matters) |
 | `filters` (19) | realistic phrasings for `parse_filters` | exact match per field |
 
-Each run prints per-suite and per-check pass rates and writes `tests/evals/results/<timestamp>.json` (model, every case, answer, check details). Cases the current approach is known to fail carry `"xfail": "reason"`. To add a case, find chunks with `scripts/query.py`, read them with `scripts/show_chunk.py`, and add the ids to a case file. `test_scorers.py` checks that the ids exist.
-
-Baseline, `gemma4:e2b` on 2026-10-28: answerable 13/16, off_topic 6/10, not_in_passages 9/10, retrieval 8/9, filters 17/19 (2 xfail). Typical failures: answers without citations, a cited passage number that doesn't exist, and off-topic questions refused correctly but labelled `not_in_passages`.
+Result files hold the model, prompt version, every case, the answer and check details. Cases the current approach is known to fail carry `"xfail": "reason"`. To add a case, find chunks with `scripts/query.py`, read them with `scripts/show_chunk.py`, and add the ids to a case file. `test_scorers.py` checks that the ids exist.
 
 Expected chunking values live in `tests/fixtures/expected.json`. Code tests use a deterministic offline embedder and a scripted chat model, so they never need a model.
 

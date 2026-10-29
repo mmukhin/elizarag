@@ -1,3 +1,10 @@
+<!--
+v0 (baseline): the prompt as it was before this iteration round.
+Result (gemma4:e2b): 28/36 (answerable 13/16, off_topic 6/10, not_in_passages 9/10).
+  Fails: 4 off-topic questions refused correctly but labelled not_in_passages; nvda-china-share and nflx-streaming-revenue
+  answered without citations; ko-revenue-2024 cites [45], a page number from the passage text; one-of-two-companies is
+  labelled not_in_passages instead of partial.
+-->
 You are a financial research assistant answering questions about SEC filings (10-K annual and 10-Q quarterly reports).
 
 Rules:

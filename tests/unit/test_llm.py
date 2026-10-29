@@ -3,7 +3,17 @@ import json
 import httpx
 import pytest
 
-from app.edgar.llm import ChatModel, OllamaChat, OpenAIChat, StructuredOutputError, get_chat_model
+from app.edgar.llm import (
+    DEFAULT_PROFILE,
+    MAX_USEFUL_BUDGET,
+    PROMPT_OVERHEAD,
+    ChatModel,
+    OllamaChat,
+    OpenAIChat,
+    StructuredOutputError,
+    context_profile,
+    get_chat_model,
+)
 from app.edgar.qa import ModelAnswer, answer_question
 from tests.fakes import ScriptedChat, answer_json, hits_for, sample_chunks
 
@@ -63,7 +73,7 @@ def test_ollama_request_carries_schema_context_window_and_no_thinking():
     assert seen["url"] == "http://x/api/chat"
     assert body["model"] == "gemma4:e2b" and body["stream"] is False and body["think"] is False
     assert body["format"] == ModelAnswer.model_json_schema()
-    assert body["options"] == {"temperature": 0.0, "num_ctx": 4096}
+    assert body["options"] == {"temperature": 0.0, "num_ctx": 4096, "num_predict": 1024}
     assert body["messages"] == [{"role": "system", "content": "SYSTEM"}, {"role": "user", "content": "USER"}]
     assert result.status == "answered" and result.claims[0].passages == [1]
 
@@ -189,3 +199,20 @@ def test_openai_does_not_send_temperature_by_default(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     assert OpenAIChat().client.temperature is None  # gpt-6-luna rejects temperature=0
     assert OpenAIChat(temperature=0.2).client.temperature == 0.2
+
+
+# --- context profiles ---------------------------------------------------------------
+
+
+def test_context_profiles_fit_the_window_and_unknown_models_are_conservative():
+    gemma, luna = context_profile("gemma4:e2b"), context_profile("gpt-6-luna")
+    assert gemma.budget + gemma.output_reserve + PROMPT_OVERHEAD <= gemma.context_window
+    assert gemma.max_budget == 16_384 - 1_024 - PROMPT_OVERHEAD
+    assert luna.budget > gemma.budget and luna.max_budget == MAX_USEFUL_BUDGET  # 1.1M window, capped
+    assert context_profile("some-new-model") == DEFAULT_PROFILE
+
+
+def test_ollama_window_and_output_cap_come_from_the_profile():
+    llm = OllamaChat(model="gemma4:e2b")
+    assert (llm.num_ctx, llm.num_predict) == (16_384, 1_024)
+    assert OllamaChat(model="gemma4:e2b", num_ctx=8_192).num_ctx == 8_192

@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from app.edgar.query_filters import COMPANIES, Company, load_companies, parse_filters
+from app.edgar.query_filters import COMPANIES, Company, load_companies, parse_filters, resolve_filters
+from app.edgar.vectorstore import Filters
 
 YEARS = {"AAPL": [2022, 2023, 2024, 2025], "NVDA": [2022, 2023, 2024, 2025], "GE": [2015], "KO": [2022, 2023, 2024]}
 
@@ -74,3 +75,53 @@ def test_companies_file_covers_every_corpus_ticker():
     data = json.loads(COMPANIES.read_text())
     assert len(data) == 54 and all(entry["company"] for entry in data.values())
     assert all(entry["aliases"] or entry["ambiguous_aliases"] for entry in data.values())
+
+
+# --- every company in the corpus ---------------------------------------------------
+
+ALL_COMPANIES = load_companies()
+
+
+def company_questions(company: Company) -> list[str]:
+    names = [company.name, *company.aliases, *company.ambiguous_aliases]
+    questions = [f"How has {n}'s revenue and growth outlook changed over the last two years?" for n in names]
+    questions += [f"What risks does {n} describe in its latest 10-K?" for n in names]
+    questions.append(f"{company.ticker} revenue trend" if len(company.ticker) > 1 else f"${company.ticker} revenue trend")
+    return questions
+
+
+@pytest.mark.parametrize("company", ALL_COMPANIES, ids=lambda c: c.ticker)
+def test_every_company_name_alias_and_ticker_selects_only_that_company(company):
+    wrong = {q: parse_filters(q, ALL_COMPANIES).tickers for q in company_questions(company)}
+    wrong = {q: got for q, got in wrong.items() if got != (company.ticker,)}
+    assert not wrong, wrong
+
+
+def test_every_pair_of_companies_is_detected_in_question_order():
+    name = {c.ticker: (c.aliases or c.ambiguous_aliases or (c.name,))[0] for c in ALL_COMPANIES}
+    wrong = []
+    for a in ALL_COMPANIES:
+        for b in ALL_COMPANIES:
+            if a.ticker != b.ticker:
+                got = parse_filters(f"Compare {name[a.ticker]} and {name[b.ticker]} revenue", ALL_COMPANIES).tickers
+                if got != (a.ticker, b.ticker):
+                    wrong.append((name[a.ticker], name[b.ticker], got))
+    assert not wrong, wrong[:10]
+
+
+# --- explicit choices vs the question -------------------------------------------------
+
+
+def test_resolve_filters_explicit_wins_per_field_and_reports_conflicts(companies):
+    question = "How has NVIDIA's revenue changed over the last two years?"
+    resolved = resolve_filters(question, companies, YEARS, Filters(tickers=["BA", "BAC"]))
+    assert resolved.filters.as_dict() == {"tickers": ["BA", "BAC"], "fiscal_years": [2024, 2025]}  # years still from the question
+    assert resolved.detected.tickers == ("NVDA",)
+    assert resolved.overridden == {"tickers": (["NVDA"], ["BA", "BAC"])}
+
+
+def test_resolve_filters_no_conflict_when_explicit_agrees_or_detection_is_off(companies):
+    question = "Apple revenue in 2024"
+    assert resolve_filters(question, companies, YEARS, Filters(tickers=["AAPL"])).overridden == {}
+    off = resolve_filters(question, companies, YEARS, detect=False)
+    assert not off.filters and not off.detected

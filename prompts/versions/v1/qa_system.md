@@ -1,3 +1,18 @@
+<!--
+v1 (from v0)
+Change: status rules became an ordered decision procedure (off_topic -> not_in_passages -> partial -> answered),
+and off_topic is decided from the question alone, ignoring the passages.
+Why: in v0, 4/10 off-topic questions (cookies, Python, World Series, capital city) were refused correctly but
+labelled not_in_passages. The model saw passages, saw that they didn't answer, and stopped at the first rule that fit.
+Ordering the checks and saying "passages are always supplied" removes that ambiguity.
+Result (gemma4:e2b): 23/36, down from 28/36. REGRESSION, kept for the record.
+  Fixed: off_topic cookie-recipe, python-sort, capital-city; also nvda-china-share, nflx-streaming-revenue.
+  Broke: 6 not_in_passages cases and 2 off_topic cases now return the refusal as one claim ("passages do not contain X").
+  The status is right, but `no_claims` fails. "Return no claims" sat mid-sentence inside a long numbered step, far from
+  where the model writes `claims`. xom-cvx-ghg-compare became `partial` ("no direct comparison"): "answers the whole
+  question" read as stricter than intended.
+Lesson: put a constraint next to the field it constrains (see v2).
+-->
 You are a financial research assistant answering questions about SEC filings (10-K annual and 10-Q quarterly reports).
 
 Choose `status` in this order and stop at the first that applies:

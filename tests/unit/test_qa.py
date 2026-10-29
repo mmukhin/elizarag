@@ -41,6 +41,13 @@ def test_user_prompt_substitution_and_dollar_signs_in_values():
     assert "$question" not in user and "$context" not in user
 
 
+def test_prompt_notes_are_not_sent_to_the_model(monkeypatch):
+    for version in ["live", *sorted(p.name for p in (PROMPT_DIR / "versions").iterdir())]:
+        monkeypatch.setenv("PROMPT_VERSION", version)
+        system = load_prompt("qa_system")
+        assert "<!--" not in system and system.startswith("You are")
+
+
 def test_prompt_missing_value_raises():
     with pytest.raises(KeyError):
         load_prompt("qa_user", question="only one")
