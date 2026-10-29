@@ -128,13 +128,13 @@ def typical_passage_tokens(retriever: HybridRetriever) -> int:
     return int(statistics.median(counts)) + 30 if counts else 800  # + passage header
 
 
-def hit_rows(hits: list[Hit], mode: str, **extra) -> pd.DataFrame:
-    """One row per hit: where it ranked in each search, its scores, and its token cost."""
+def hit_rows(hits: list[Hit], mode: str, searches: list[int] | None = None) -> pd.DataFrame:
+    """One row per hit: where it ranked in each search, its scores, and its token cost (and which search, if given)."""
     rows = []
-    for hit in hits:
+    for n, hit in enumerate(hits):
         m = hit.doc.metadata
         rows.append(
-            extra
+            ({"search": searches[n]} if searches else {})
             | {
                 "passage": f"{m['ticker']} · {m['filing_type']} FY{m['fiscal_year']} · chunk {m['chunk_index'] + 1}/{m['n_chunks']}",
                 "vector #": hit.vector_rank,
@@ -187,8 +187,8 @@ def render_passages(
     unused = [(n, h) for n, t in enumerate(traces, 1) for h in t.unused]
     with st.expander(f"{len(unused)} candidates not used (ranked below top-k)", icon=":material/low_priority:"):
         if unused:
-            frames = [hit_rows([h], mode, search=n) for n, h in unused]
-            st.dataframe(pd.concat(frames, ignore_index=True), hide_index=True, width="stretch")
+            table = hit_rows([h for _, h in unused], mode, searches=[n for n, _ in unused])
+            st.dataframe(table, hide_index=True, width="stretch")
         else:
             st.caption("No other candidates.")
 

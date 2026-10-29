@@ -2,6 +2,7 @@
 
 import re
 from collections import Counter
+from datetime import date
 from typing import Literal
 
 import tiktoken
@@ -118,8 +119,28 @@ def build_context(hits: list[Hit]) -> tuple[str, list[Source]]:
                 chunk_index=m["chunk_index"],
             )
         )
-        blocks.append(f"[{n}] {m['ticker']} · {m['filing_type']} · FY{m['fiscal_year']} · filed {m['filing_date']}\n{hit.doc.page_content}")
+        blocks.append(f"[{n}] {passage_label(m)}\n{hit.doc.page_content}")
     return "\n\n".join(blocks), sources
+
+
+def passage_label(m: dict) -> str:
+    """`AAPL · 10-K · FY2025 · period ending 2025-09-27 · filed 2025-10-31` (period omitted when unknown)."""
+    period = f" · period ending {m['period_end']}" if m.get("period_end") else ""
+    return f"{m['ticker']} · {m['filing_type']} · FY{m['fiscal_year']}{period} · filed {m['filing_date']}"
+
+
+def coverage(hits: list[Hit]) -> str:
+    """Which filings the passages come from, per company, newest last, so the model can tell what period it has."""
+    filings: dict[str, dict[str, dict]] = {}
+    for hit in hits:
+        m = hit.doc.metadata
+        filings.setdefault(m["ticker"], {})[m["source_file"]] = m
+    lines = []
+    for ticker, by_file in filings.items():
+        ordered = sorted(by_file.values(), key=lambda m: (m.get("period_end") or "", m["filing_date"]))
+        parts = [passage_label(m).split(" · ", 1)[1] for m in ordered]
+        lines.append(f"- {ticker}: {'; '.join(parts)}. Newest: {parts[-1].split(' · filed')[0]}.")
+    return "\n".join(lines)
 
 
 def validate(answer: ModelAnswer, n_sources: int) -> list[str]:
@@ -163,9 +184,18 @@ def resolve_claims(answer: ModelAnswer, sources: list[Source]) -> list[Claim]:
 
 
 def answer_question(
-    question: str, hits: list[Hit], llm: ChatModel, max_context_tokens: int = 8000, filters: dict | None = None
+    question: str,
+    hits: list[Hit],
+    llm: ChatModel,
+    max_context_tokens: int = 8000,
+    filters: dict | None = None,
+    today: date | None = None,
 ) -> QAResult:
-    """Answer `question` from retrieved `hits` only. No hits -> not_in_passages, no model call."""
+    """Answer `question` from retrieved `hits` only. No hits -> not_in_passages, no model call.
+
+    The prompt gets `today` (default: the current date) and the periods the passages cover, so relative questions
+    ("last two years") are read against the real date and missing periods can be called out.
+    """
     model = getattr(llm, "model", type(llm).__name__)
     filters = filters or {}
     if not hits:
@@ -183,7 +213,13 @@ def answer_question(
     context, sources = build_context(kept)
     answer = llm.generate(
         system=load_prompt("qa_system"),
-        user=load_prompt("qa_user", question=question, context=context),
+        user=load_prompt(
+            "qa_user",
+            question=question,
+            context=context,
+            today=(today or date.today()).isoformat(),
+            coverage=coverage(kept),
+        ),
         schema=ModelAnswer,
     )
     warnings = validate(answer, len(sources))

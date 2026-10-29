@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from app.edgar.hybrid import Hit
@@ -8,6 +10,7 @@ from app.edgar.qa import (
     QAResult,
     answer_question,
     build_context,
+    coverage,
     resolve_claims,
     select_hits,
     validate,
@@ -215,3 +218,51 @@ def test_answer_question_off_topic_passes_through_without_claims():
 def test_answer_question_records_filters():
     result = answer_question("q", hits_for(*sample_chunks()[:2]), ScriptedChat(answer_json()), filters={"tickers": ["AAPL"]})
     assert result.filters == {"tickers": ["AAPL"]}
+
+
+# --- dates and coverage -------------------------------------------------------
+
+
+def dated(text, ticker, fiscal_year, period_end, filed, index=0):
+    doc = chunk(text, ticker, fiscal_year, index=index)
+    doc.metadata |= {"period_end": period_end, "filing_date": filed, "source_file": f"{ticker}_{fiscal_year}.txt"}
+    return doc
+
+
+def test_passage_header_shows_the_period_end_when_known():
+    context, _ = build_context(hits_for(dated("revenue grew", "NVDA", 2025, "2025-01-26", "2025-02-26")))
+    assert context.startswith("[1] NVDA · 10-K · FY2025 · period ending 2025-01-26 · filed 2025-02-26\n")
+    context, _ = build_context(hits_for(chunk("no period", "AAPL")))  # older chunks without a period end
+    assert context.startswith("[1] AAPL · 10-K · FY2025 · filed 2025-12-01\n")
+
+
+def test_coverage_lists_each_companys_filings_oldest_to_newest():
+    hits = hits_for(
+        dated("fy25", "NVDA", 2025, "2025-01-26", "2025-02-26"),
+        dated("fy24", "NVDA", 2024, "2024-01-28", "2024-02-21"),
+        dated("fy25 again", "NVDA", 2025, "2025-01-26", "2025-02-26", index=1),
+        dated("apple", "AAPL", 2025, "2025-09-27", "2025-10-31"),
+    )
+    assert coverage(hits).splitlines() == [
+        "- NVDA: 10-K · FY2024 · period ending 2024-01-28 · filed 2024-02-21; "
+        "10-K · FY2025 · period ending 2025-01-26 · filed 2025-02-26. Newest: 10-K · FY2025 · period ending 2025-01-26.",
+        "- AAPL: 10-K · FY2025 · period ending 2025-09-27 · filed 2025-10-31. Newest: 10-K · FY2025 · period ending 2025-09-27.",
+    ]
+
+
+def test_v4_prompt_gets_todays_date_coverage_and_date_rules(monkeypatch):
+    monkeypatch.setenv("PROMPT_VERSION", "v4")
+    llm = ScriptedChat(answer_json())
+    hits = hits_for(dated("revenue grew", "NVDA", 2025, "2025-01-26", "2025-02-26"))
+    answer_question("How has NVIDIA's revenue changed over the last two years?", hits, llm, today=date(2026, 10, 29))
+    user, system = llm.calls[0]["user"], llm.calls[0]["system"]
+    assert "Today's date: 2026-10-29" in user and "- NVDA: 10-K · FY2025 · period ending 2025-01-26" in user
+    assert "against today's date" in system and "exactly what is missing" in system
+    assert "$12.3 billion" in system  # the literal dollar survives templating
+
+
+def test_older_prompt_versions_ignore_the_new_values(monkeypatch):
+    monkeypatch.setenv("PROMPT_VERSION", "v3")
+    llm = ScriptedChat(answer_json())
+    answer_question("q", hits_for(*sample_chunks()[:1]), llm, today=date(2026, 10, 29))
+    assert "Today's date" not in llm.calls[0]["user"]

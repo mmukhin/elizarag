@@ -83,6 +83,13 @@ def check_caveat(result: QAResult) -> Check:
     return Check("caveat_present", bool(result.caveats), "")
 
 
+def check_names_missing(result: QAResult, terms: list[str]) -> Check:
+    """The caveats (or answer) say *what* is missing, e.g. the year: each term must appear; `a|b` accepts either."""
+    text = " ".join([*result.caveats, result.answer]).lower()
+    missing = [t for t in terms if not any(alt.lower() in text for alt in t.split("|"))]
+    return Check("names_missing", not missing, f"caveats {result.caveats} do not mention {missing}" if missing else "")
+
+
 def check_numbers_grounded(result: QAResult, passages: list[str]) -> Check:
     """Every figure in the answer and claims appears in some passage (allowing unit rescaling and rounding)."""
     known = {n for text in passages for n in numbers(text, skip_trivial=False)}
@@ -111,4 +118,6 @@ def score(result: QAResult, expect: dict, passages: list[str]) -> list[Check]:
         checks.append(check_no_claims(result))
     if expect.get("caveat"):
         checks.append(check_caveat(result))
+    if expect.get("names_missing"):
+        checks.append(check_names_missing(result, expect["names_missing"]))
     return checks

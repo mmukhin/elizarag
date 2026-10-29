@@ -11,6 +11,7 @@ from tests.evals.scorers import (
     check_cites_gold,
     check_claims_cited,
     check_mentions,
+    check_names_missing,
     check_no_claims,
     check_not_mentions,
     check_numbers_grounded,
@@ -101,3 +102,11 @@ def test_pinned_hits_rebuild_the_indexed_chunk():
     [hit] = pinned_hits([AAPL])
     assert hit.doc.metadata["ticker"] == "AAPL" and hit.doc.metadata["chunk_index"] == 30
     assert "416,161" in hit.doc.page_content
+
+
+def test_names_missing_needs_the_missing_period_in_caveats_or_answer():
+    stale = result(status="partial", answer="Revenue rose in FY2024 and FY2025 [1].", caveats=["No FY2026 filing in the passages."])
+    assert check_names_missing(stale, ["2026"]).passed
+    vague = result(status="partial", answer="Revenue rose [1].", caveats=["Some data may be missing."])
+    check = check_names_missing(vague, ["2026"])
+    assert not check.passed and "2026" in check.detail

@@ -1,6 +1,7 @@
 """Answer quality on pinned passages: answerable, off-topic and not-in-passages questions."""
 
 import time
+from datetime import date
 
 import pytest
 
@@ -12,13 +13,15 @@ from tests.helpers import needs_corpus
 pytestmark = [pytest.mark.eval, needs_corpus]
 
 CASES = load_cases("answerable") + load_cases("off_topic") + load_cases("not_in_passages")
+TODAY = date(2026, 10, 29)  # fixed, so results don't drift with the calendar; a case can set its own "today"
 
 
 @pytest.mark.parametrize("suite, case", CASES)
 def test_generation(llm, suite, case):
     hits = pinned_hits(case["chunk_ids"])
     started = time.monotonic()
-    result = answer_question(case["question"], hits, llm)
+    today = date.fromisoformat(case["today"]) if case.get("today") else TODAY
+    result = answer_question(case["question"], hits, llm, today=today)
     checks = score(result, case["expect"], [h.doc.page_content for h in hits])
     record(
         suite,

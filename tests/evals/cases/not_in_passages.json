@@ -58,5 +58,13 @@
     "question": "What will NVIDIA's revenue be in fiscal 2030?",
     "chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58"],
     "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "stale-relative-years",
+    "question": "How has NVIDIA's revenue changed over the last two years?",
+    "today": "2026-10-29",
+    "chunk_ids": ["NVDA_10K_2024Q1_2024-02-21_full.txt#56", "NVDA_10K_2025-02-26_full.txt#58"],
+    "expect": {"status": ["partial"], "tickers": ["NVDA"], "must_mention": ["60.9", "130.5", "FY2024|fiscal 2024|fiscal year 2024", "FY2025|fiscal 2025|fiscal year 2025"], "caveat": true, "names_missing": ["2026"]},
+    "note": "asked in Oct 2026, the newest NVIDIA filing is FY2025 (year ended Jan 2025): answer FY2024-FY2025 with exact years, and say FY2026 is missing"
   }
 ]
