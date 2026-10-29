@@ -1,0 +1,56 @@
+[
+  {
+    "id": "aapl-tariffs-filtered",
+    "question": "What tariff risks does Apple describe?",
+    "tickers": ["AAPL"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8"]
+  },
+  {
+    "id": "aapl-tariffs-unfiltered",
+    "question": "What tariff risks does Apple describe in its fiscal 2025 10-K?",
+    "k": 5,
+    "expected_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8"]
+  },
+  {
+    "id": "aapl-total-net-sales",
+    "question": "What were Apple's total net sales in fiscal 2025?",
+    "tickers": ["AAPL"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#30", "AAPL_10K_2025-10-31_full.txt#31", "AAPL_10K_2025-10-31_full.txt#37", "AAPL_10K_2025-10-31_full.txt#45"]
+  },
+  {
+    "id": "aapl-services-drivers",
+    "question": "Why did Apple's Services net sales increase?",
+    "tickers": ["AAPL"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#31"]
+  },
+  {
+    "id": "tsla-battery-suppliers",
+    "question": "battery cell suppliers Panasonic CATL supply disruption",
+    "tickers": ["TSLA"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["TSLA_10K_2026-01-29_full.txt#18"]
+  },
+  {
+    "id": "tsla-raw-material-pricing",
+    "question": "How does Tesla manage raw material prices with long-term supply contracts?",
+    "tickers": ["TSLA"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["TSLA_10K_2026-01-29_full.txt#9"]
+  },
+  {
+    "id": "jpm-net-interest-income",
+    "question": "What was JPMorgan's net interest income in 2025?",
+    "tickers": ["JPM"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["JPM_10K_2026-02-13_full.txt#113", "JPM_10K_2026-02-13_full.txt#114", "JPM_10K_2026-02-13_full.txt#132"]
+  },
+  {
+    "id": "jpm-allowance-credit-losses",
+    "question": "How does JPMorgan estimate its allowance for credit losses?",
+    "tickers": ["JPM"], "k": 5,
+    "expected_chunk_ids": ["JPM_10K_2026-02-13_full.txt#456", "JPM_10K_2026-02-13_full.txt#461"]
+  },
+  {
+    "id": "aapl-tsla-tariffs-balanced",
+    "question": "Compare the tariff risks Apple and Tesla describe.",
+    "tickers": ["AAPL", "TSLA"], "fiscal_years": [2025], "k": 5,
+    "expected_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8", "TSLA_10K_2026-01-29_full.txt#8"]
+  }
+]

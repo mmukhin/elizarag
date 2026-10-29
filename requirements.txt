@@ -1,0 +1,15 @@
+pytest
+tiktoken
+httpx
+langchain-core
+langchain-text-splitters
+# vector store (local server: chroma run --path data/chroma)
+chromadb>=1.5.9
+# optional: external embedding provider (EMBEDDING_PROVIDER=openai)
+langchain-openai
+# hybrid search + UI
+rank-bm25
+numpy
+streamlit
+pydantic
+python-dotenv  # .env (OPENAI_API_KEY, LLM_PROVIDER, ...)

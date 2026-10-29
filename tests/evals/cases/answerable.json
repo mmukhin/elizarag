@@ -1,0 +1,98 @@
+[
+  {
+    "id": "aapl-tariffs-fy2025",
+    "question": "What tariff risks does Apple describe in its fiscal 2025 10-K?",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8", "AAPL_10K_2025-10-31_full.txt#45"],
+    "expect": {"status": ["answered"], "tickers": ["AAPL"], "must_mention": ["tariff"], "gold_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8"]}
+  },
+  {
+    "id": "aapl-net-sales-fy2025",
+    "question": "What were Apple's total net sales in fiscal 2025, and how did they change from 2024?",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#30", "AAPL_10K_2025-10-31_full.txt#8"],
+    "expect": {"status": ["answered"], "tickers": ["AAPL"], "must_mention": ["416"], "gold_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#30"]}
+  },
+  {
+    "id": "aapl-services-drivers",
+    "question": "Why did Apple's Services net sales increase in 2025?",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#31", "AAPL_10K_2025-10-31_full.txt#8"],
+    "expect": {"status": ["answered"], "tickers": ["AAPL"], "must_mention": ["advertising|app store|cloud"], "gold_chunk_ids": ["AAPL_10K_2025-10-31_full.txt#31"]}
+  },
+  {
+    "id": "tsla-battery-suppliers",
+    "question": "What battery cell supply risks does Tesla describe?",
+    "chunk_ids": ["TSLA_10K_2026-01-29_full.txt#18", "TSLA_10K_2026-01-29_full.txt#22"],
+    "expect": {"status": ["answered"], "tickers": ["TSLA"], "must_mention": ["panasonic|catl|supplier"], "gold_chunk_ids": ["TSLA_10K_2026-01-29_full.txt#18"]}
+  },
+  {
+    "id": "tsla-raw-material-pricing",
+    "question": "How does Tesla try to manage raw material pricing and supply?",
+    "chunk_ids": ["TSLA_10K_2026-01-29_full.txt#9", "TSLA_10K_2026-01-29_full.txt#11"],
+    "expect": {"status": ["answered"], "tickers": ["TSLA"], "must_mention": ["contract"], "gold_chunk_ids": ["TSLA_10K_2026-01-29_full.txt#9"]}
+  },
+  {
+    "id": "nvda-revenue-fy2025",
+    "question": "How much did NVIDIA's total revenue and Data Center revenue grow in fiscal 2025?",
+    "chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58", "NVDA_10K_2025-02-26_full.txt#63"],
+    "expect": {"status": ["answered"], "tickers": ["NVDA"], "must_mention": ["130.5", "142"], "gold_chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58"]}
+  },
+  {
+    "id": "nvda-data-center-trend",
+    "question": "How did NVIDIA's Data Center revenue growth change from fiscal 2024 to fiscal 2025?",
+    "chunk_ids": ["NVDA_10K_2024Q1_2024-02-21_full.txt#56", "NVDA_10K_2025-02-26_full.txt#58"],
+    "expect": {"status": ["answered"], "tickers": ["NVDA"], "must_mention": ["217", "142"], "gold_chunk_ids": ["NVDA_10K_2024Q1_2024-02-21_full.txt#56", "NVDA_10K_2025-02-26_full.txt#58"]}
+  },
+  {
+    "id": "nvda-china-share",
+    "question": "How did China's share of NVIDIA's Data Center revenue change in fiscal 2024?",
+    "chunk_ids": ["NVDA_10K_2024Q1_2024-02-21_full.txt#29", "NVDA_10K_2024Q1_2024-02-21_full.txt#61"],
+    "expect": {"status": ["answered"], "tickers": ["NVDA"], "must_mention": ["19", "14"], "gold_chunk_ids": ["NVDA_10K_2024Q1_2024-02-21_full.txt#29"]}
+  },
+  {
+    "id": "msft-azure-growth",
+    "question": "How fast did Azure grow in Microsoft's fiscal 2025?",
+    "chunk_ids": ["MSFT_10K_2025-07-30_full.txt#61", "MSFT_10K_2025-07-30_full.txt#58"],
+    "expect": {"status": ["answered"], "tickers": ["MSFT"], "must_mention": ["34"], "gold_chunk_ids": ["MSFT_10K_2025-07-30_full.txt#61"]}
+  },
+  {
+    "id": "jpm-net-interest-income",
+    "question": "What was JPMorgan's net interest income in 2025, and what drove the change?",
+    "chunk_ids": ["JPM_10K_2026-02-13_full.txt#113", "JPM_10K_2026-02-13_full.txt#114"],
+    "expect": {"status": ["answered"], "tickers": ["JPM"], "must_mention": ["95"], "gold_chunk_ids": ["JPM_10K_2026-02-13_full.txt#113", "JPM_10K_2026-02-13_full.txt#114"]}
+  },
+  {
+    "id": "pfe-ira-impact",
+    "question": "What impact does Pfizer expect from the Inflation Reduction Act?",
+    "chunk_ids": ["PFE_10K_2025-02-27_full.txt#40", "PFE_10K_2025-02-27_full.txt#41"],
+    "expect": {"status": ["answered"], "tickers": ["PFE"], "must_mention": ["1 billion", "part d"], "gold_chunk_ids": ["PFE_10K_2025-02-27_full.txt#41"]}
+  },
+  {
+    "id": "pfe-mrk-ira-compare",
+    "question": "How are Pfizer and Merck affected by the Inflation Reduction Act's Medicare drug pricing provisions?",
+    "chunk_ids": ["PFE_10K_2025-02-27_full.txt#41", "MRK_10K_2025-02-25_full.txt#74", "MRK_10K_2025-02-25_full.txt#178"],
+    "expect": {"status": ["answered"], "tickers": ["PFE", "MRK"], "must_mention": ["medicare"], "gold_chunk_ids": ["PFE_10K_2025-02-27_full.txt#41", "MRK_10K_2025-02-25_full.txt#74", "MRK_10K_2025-02-25_full.txt#178"]}
+  },
+  {
+    "id": "xom-cvx-ghg-compare",
+    "question": "Compare the greenhouse gas regulation risks that Exxon Mobil and Chevron describe.",
+    "chunk_ids": ["XOM_10K_2026-02-18_full.txt#12", "CVX_10K_2025-02-21_full.txt#4", "CVX_10K_2025-02-21_full.txt#40"],
+    "expect": {"status": ["answered"], "tickers": ["XOM", "CVX"], "must_mention": ["greenhouse gas|emission"], "gold_chunk_ids": ["XOM_10K_2026-02-18_full.txt#12", "CVX_10K_2025-02-21_full.txt#4"]}
+  },
+  {
+    "id": "wmt-associates",
+    "question": "How many associates does Walmart employ?",
+    "chunk_ids": ["WMT_10K_2025-03-14_full.txt#17", "WMT_10K_2025-03-14_full.txt#112"],
+    "expect": {"status": ["answered"], "tickers": ["WMT"], "must_mention": ["2.1 million"], "gold_chunk_ids": ["WMT_10K_2025-03-14_full.txt#17"]}
+  },
+  {
+    "id": "nflx-streaming-revenue",
+    "question": "What were Netflix's streaming revenues in 2025, and how much did they grow?",
+    "chunk_ids": ["NFLX_10K_2026-01-23_full.txt#28", "NFLX_10K_2026-01-23_full.txt#30"],
+    "expect": {"status": ["answered"], "tickers": ["NFLX"], "must_mention": ["45", "16"], "gold_chunk_ids": ["NFLX_10K_2026-01-23_full.txt#28"]}
+  },
+  {
+    "id": "ko-revenue-2024",
+    "question": "What were Coca-Cola's net operating revenues in 2024?",
+    "chunk_ids": ["KO_10K_2025-02-20_full.txt#71", "KO_10K_2025-02-20_full.txt#76"],
+    "expect": {"status": ["answered"], "tickers": ["KO"], "must_mention": ["47"], "gold_chunk_ids": ["KO_10K_2025-02-20_full.txt#71"]}
+  }
+]

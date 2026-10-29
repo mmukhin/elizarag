@@ -1,0 +1,62 @@
+[
+  {
+    "id": "company-not-in-corpus",
+    "question": "What risk factors does Rivian describe in its 10-K?",
+    "chunk_ids": ["TSLA_10K_2026-01-29_full.txt#18", "TSLA_10K_2026-01-29_full.txt#9"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "year-not-in-passages",
+    "question": "What were Apple's total net sales in fiscal 2015?",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#30"],
+    "expect": {"status": ["not_in_passages"], "caveat": true}
+  },
+  {
+    "id": "figure-not-in-passages",
+    "question": "What was Tesla's net income in 2025?",
+    "chunk_ids": ["TSLA_10K_2026-01-29_full.txt#18", "TSLA_10K_2026-01-29_full.txt#9"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "nvda-headcount",
+    "question": "How many employees does NVIDIA have?",
+    "chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58", "NVDA_10K_2025-02-26_full.txt#63"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "ko-dividend",
+    "question": "What dividend per share did Coca-Cola declare in 2024?",
+    "chunk_ids": ["KO_10K_2025-02-20_full.txt#71", "KO_10K_2025-02-20_full.txt#76"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "pfe-tariffs",
+    "question": "What does Pfizer say about tariffs on its products?",
+    "chunk_ids": ["PFE_10K_2025-02-27_full.txt#40", "PFE_10K_2025-02-27_full.txt#41"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  },
+  {
+    "id": "quarter-not-in-annual",
+    "question": "What was JPMorgan's net interest income in the third quarter of 2025?",
+    "chunk_ids": ["JPM_10K_2026-02-13_full.txt#113", "JPM_10K_2026-02-13_full.txt#114"],
+    "expect": {"status": ["not_in_passages", "partial"], "caveat": true}
+  },
+  {
+    "id": "one-of-two-companies",
+    "question": "Compare the tariff risks that Apple and Tesla describe.",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#8", "AAPL_10K_2025-10-31_full.txt#31"],
+    "expect": {"status": ["partial"], "tickers": ["AAPL"], "caveat": true}
+  },
+  {
+    "id": "false-premise-revenue-tripled",
+    "question": "Why did Apple's total net sales triple in fiscal 2025?",
+    "chunk_ids": ["AAPL_10K_2025-10-31_full.txt#30"],
+    "expect": {"status": ["answered", "partial", "not_in_passages"], "must_mention": ["6%|416"], "must_not_mention": ["tripled because", "tripling was"]}
+  },
+  {
+    "id": "future-prediction",
+    "question": "What will NVIDIA's revenue be in fiscal 2030?",
+    "chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58"],
+    "expect": {"status": ["not_in_passages"], "no_claims": true, "caveat": true}
+  }
+]

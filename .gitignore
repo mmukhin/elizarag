@@ -1,0 +1,19 @@
+# secrets
+.env
+
+# environment and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+
+# data: the SEC corpus is supplied separately; indexes are rebuilt with scripts/build_index.py
+data/edgar_corpus/
+data/chroma/
+data/index/
+
+# eval run reports
+tests/evals/results/
+
+# interview assignment
+UPDATED_FDE-AI-RAG-Assessment.pdf

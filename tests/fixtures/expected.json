@@ -1,0 +1,48 @@
+{
+  "AAPL_10K_2025-10-31_full.txt": {
+    "meta": {
+      "company": "Apple Inc",
+      "ticker": "AAPL",
+      "cik": "0000320193",
+      "filing_type": "10-K",
+      "filing_date": "2025-10-31",
+      "fiscal_year": 2025,
+      "period_end": "2025-09-27"
+    },
+    "snippets": [
+      "Company Background",
+      "The Company’s operations and performance depend significantly on global and regional economic conditions"
+    ],
+    "chunks": [60, 100]
+  },
+  "TSLA_10K_2026-01-29_full.txt": {
+    "meta": {
+      "company": "Tesla Inc",
+      "ticker": "TSLA",
+      "cik": "0001318605",
+      "filing_type": "10-K",
+      "filing_date": "2026-01-29",
+      "fiscal_year": 2025,
+      "period_end": "2025-12-31"
+    },
+    "snippets": [
+      "You should carefully consider the risks described below"
+    ],
+    "chunks": [110, 180]
+  },
+  "JPM_10K_2026-02-13_full.txt": {
+    "meta": {
+      "company": "JPMorgan Chase & Co",
+      "ticker": "JPM",
+      "cik": "0000019617",
+      "filing_type": "10-K",
+      "filing_date": "2026-02-13",
+      "fiscal_year": 2025,
+      "period_end": "2025-12-31"
+    },
+    "snippets": [
+      "The following discussion sets forth the material risk factors"
+    ],
+    "chunks": [450, 750]
+  }
+}
