@@ -33,7 +33,7 @@
     "id": "nvda-revenue-fy2025",
     "question": "How much did NVIDIA's total revenue and Data Center revenue grow in fiscal 2025?",
     "chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58", "NVDA_10K_2025-02-26_full.txt#63"],
-    "expect": {"status": ["answered"], "tickers": ["NVDA"], "must_mention": ["130.5", "142"], "gold_chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58"]}
+    "expect": {"status": ["answered"], "tickers": ["NVDA"], "must_mention": ["130.5|114", "142"], "gold_chunk_ids": ["NVDA_10K_2025-02-26_full.txt#58"]}
   },
   {
     "id": "nvda-data-center-trend",

@@ -110,3 +110,19 @@ def test_names_missing_needs_the_missing_period_in_caveats_or_answer():
     vague = result(status="partial", answer="Revenue rose [1].", caveats=["Some data may be missing."])
     check = check_names_missing(vague, ["2026"])
     assert not check.passed and "2026" in check.detail
+
+
+@pytest.mark.parametrize(
+    "answer, ok",
+    [
+        ("Revenue was $130.5 billion in FY2025, the year ended January 26, 2025 [1].", True),  # dates are not figures
+        ("FY2025 (period ending 2025-01-26) revenue was $130.5 billion [1].", True),
+        ("Growth slowed from 217% to 142%, a drop of 75 percentage points [1].", True),  # difference of two figures
+        ("Revenue rose by $69.6 billion, from $60.9 billion to $130.5 billion [1].", True),
+        ("Revenue rose by $88.8 billion [1].", False),  # neither a passage figure nor a difference of two
+    ],
+)
+def test_numbers_grounded_ignores_dates_and_accepts_simple_arithmetic(answer, ok):
+    passages = ["Revenue for fiscal year 2025 was $130.5 billion, up 114%. Data Center revenue was up 142%.",
+                "Revenue for fiscal year 2024 was $60.9 billion, up 126%. Data Center revenue was up 217%."]
+    assert check_numbers_grounded(result(answer=answer, claims=[]), passages).passed is ok

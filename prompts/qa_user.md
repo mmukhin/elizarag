@@ -1,3 +1,8 @@
+Today's date: $today
+
+Data coverage (the filings these passages come from):
+$coverage
+
 Context passages:
 
 $context

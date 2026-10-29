@@ -39,9 +39,16 @@ def test_system_prompt_enforces_grounding_and_schema_fields():
 
 
 def test_user_prompt_substitution_and_dollar_signs_in_values():
-    user = load_prompt("qa_user", question="What is $5 billion?", context="[1] revenue was $96.9B")
+    user = load_prompt(
+        "qa_user",
+        question="What is $5 billion?",
+        context="[1] revenue was $96.9B",
+        today="2026-10-29",
+        coverage="- NVDA: 10-K · FY2025",
+    )
     assert "What is $5 billion?" in user and "[1] revenue was $96.9B" in user
-    assert "$question" not in user and "$context" not in user
+    assert "Today's date: 2026-10-29" in user and "- NVDA: 10-K · FY2025" in user
+    assert not any(f"${name}" in user for name in ("question", "context", "today", "coverage"))
 
 
 def test_prompt_notes_are_not_sent_to_the_model(monkeypatch):

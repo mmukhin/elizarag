@@ -1,6 +1,7 @@
 """Deterministic checks on a `QAResult`. Each returns a `Check`; `score` runs the ones a case asks for."""
 
 import re
+from bisect import bisect_left
 from dataclasses import dataclass
 
 from app.edgar.qa import CITATION, GROUNDED, QAResult
@@ -8,6 +9,8 @@ from app.edgar.qa import CITATION, GROUNDED, QAResult
 NUMBER = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
 SCALES = (1, 1e-3, 1e3, 1e-6, 1e6)  # "416,161" (millions) may be written "416.2 billion"
 TOLERANCE = 0.005  # relative, for rounding
+MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+DATE = re.compile(rf"\b{MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}|\b\d{{1,2}}\s+{MONTH}\s+\d{{4}}|\b\d{{4}}-\d{{2}}-\d{{2}}\b")
 
 
 @dataclass
@@ -22,9 +25,13 @@ def _text(result: QAResult) -> str:
 
 
 def numbers(text: str, skip_trivial: bool = True) -> list[float]:
-    """Figures in `text`, without [n] citations. With `skip_trivial`, drop bare years and single digits."""
+    """Figures in `text`, without [n] citations. With `skip_trivial`, also drop dates ("January 26, 2025"; the model
+    is asked to state when periods end, and those dates come from the passage headers), bare years and single digits."""
     found = []
-    for raw in NUMBER.findall(CITATION.sub(" ", text)):
+    text = CITATION.sub(" ", text)
+    if skip_trivial:
+        text = DATE.sub(" ", text)
+    for raw in NUMBER.findall(text):
         plain = raw.rstrip(",").replace(",", "")
         value = float(plain)
         if skip_trivial and "." not in plain and "," not in raw and (value < 10 or 1900 <= value <= 2100):
@@ -90,13 +97,28 @@ def check_names_missing(result: QAResult, terms: list[str]) -> Check:
     return Check("names_missing", not missing, f"caveats {result.caveats} do not mention {missing}" if missing else "")
 
 
+def _derived(n: float, ordered: list[float]) -> bool:
+    """`n` is the difference (or sum) of two passage figures, e.g. 217% -> 142% is "75 points", $60.9B -> $130.5B is
+    "$69.6 billion", allowing rounding to one decimal."""
+    tolerance = max(TOLERANCE * abs(n), 0.051)
+    for a in ordered:
+        for target in (a - n, a + n, n - a):
+            i = bisect_left(ordered, target - tolerance)
+            if i < len(ordered) and ordered[i] <= target + tolerance:
+                return True
+    return False
+
+
 def check_numbers_grounded(result: QAResult, passages: list[str]) -> Check:
-    """Every figure in the answer and claims appears in some passage (allowing unit rescaling and rounding)."""
+    """Every figure in the answer and claims appears in some passage (allowing unit rescaling and rounding),
+    or is the difference or sum of two passage figures. Anything else counts as invented."""
     known = {n for text in passages for n in numbers(text, skip_trivial=False)}
+    ordered = sorted(known)
     invented = [
         n
         for n in numbers(_text(result))
         if not any(abs(n - k * s) <= TOLERANCE * max(abs(n), 1e-9) for k in known for s in SCALES)
+        and not _derived(n, ordered)
     ]
     return Check("numbers_grounded", not invented, f"not in passages: {invented}" if invented else "")
 
