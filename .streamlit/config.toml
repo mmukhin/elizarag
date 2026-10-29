@@ -1,0 +1,3 @@
+# one accent colour across the app (matches the highlighted chat input in app/ui.py)
+[theme]
+primaryColor = "#6366F1"

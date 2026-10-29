@@ -202,7 +202,11 @@ def model_choices() -> list[tuple[str, str]]:
 
 
 def default_choice(choices: list[tuple[str, str]]) -> int:
-    """Index of the choice matching $LLM_PROVIDER / $LLM_MODEL (default: local gemma)."""
-    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
-    wanted = (provider, os.environ.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, ""))
+    """Index of the UI's default model: $LLM_PROVIDER / $LLM_MODEL if set, else gpt-6-luna when an OpenAI key is
+    available, else local gemma (so the app still answers offline)."""
+    if os.environ.get("LLM_PROVIDER") or os.environ.get("LLM_MODEL"):
+        provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
+        wanted = (provider, os.environ.get("LLM_MODEL") or DEFAULT_MODELS.get(provider, ""))
+    else:
+        wanted = ("openai", DEFAULT_MODELS["openai"]) if os.environ.get("OPENAI_API_KEY") else ("ollama", DEFAULT_MODELS["ollama"])
     return choices.index(wanted) if wanted in choices else 0

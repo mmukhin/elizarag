@@ -102,10 +102,17 @@ The scripts and the UI talk to the Chroma server at `CHROMA_URL` (default `http:
 
 ## Q&A UI and hybrid search
 
-Type a question and press Enter. The page shows the most relevant filing passages and, with **Generate answer with LLM** ticked, a grounded answer.
+The page is a chat. Type in the input pinned at the bottom (or click one of the example questions on the welcome screen) and press Enter. Each answer appears as an assistant message:
+
+- a **status box** listing what it did (filters detected, searches run, passages sent, answer checked), which collapses to a one-line summary when done;
+- a **status badge** (Answered / Partially answered / Not in the filings / Off topic), the **answer** in larger type with `[n]` citations that jump to and highlight passage n, and **key points** per company;
+- one quiet line with the model, tokens sent and received, cost and latency, then an action row: 👍/👎 **feedback**, **Regenerate**, and four planned actions that open a "Coming soon" dialog: copy with citations (for a memo), export tables to Excel/CSV (for the comps model), share a link to the answer and its evidence with the deal team, and flag a wrong answer (to feed the eval set). They are defined in `app/ui.py::COMING_SOON`;
+- collapsible details in pipeline order: the **retrieval** trace, **candidates not used**, **top-k passages not sent**, **passages sent to the LLM**, and the **structured JSON** the model returned.
+
+The example questions stay available under the conversation. Earlier questions and answers stay on the page, and redrawing them never re-runs search or the LLM. **New chat** clears the conversation. Each question is answered on its own: the assistant does not use earlier turns as context.
 
 The sidebar has two parts:
-- **Answer / Context** (top): one **Model** picker (`ollama: gemma4:e2b`, `openai: gpt-6-luna`, `openai: gpt-4o-mini`, plus `$LLM_PROVIDER`/`$LLM_MODEL` if set to something else). Picking a model immediately updates the context-window info and resets *passages per company* and the *token budget* to that model's defaults (see [Context budget per model](#answer-generation)), without re-running the question.
+- **Answer / Context** (top): one **Model** picker (`ollama: gemma4:e2b`, `openai: gpt-6-luna`, `openai: gpt-4o-mini`, plus `$LLM_PROVIDER`/`$LLM_MODEL` if set to something else). It defaults to **gpt-6-luna** when `OPENAI_API_KEY` is set (e.g. in `.env`), otherwise to local gemma, or to `$LLM_PROVIDER`/`$LLM_MODEL` if given. Picking a model immediately updates the context-window info and resets *passages per company* and the *token budget* to that model's defaults (see [Context budget per model](#answer-generation)), without re-running the question.
 - **Search** (a form): mode, companies, balance, years, filing type, quarters, filter detection. These take effect when you press **Apply and re-run**, which re-runs the current question with all settings.
 
 | Mode | How it ranks |
@@ -118,7 +125,7 @@ The sidebar has two parts:
 - **Balance across selected companies** (on by default when 2+ companies are selected or detected) retrieves *k* passages per company instead of *k* overall, so one company can't crowd out the rest in comparison questions.
 - Each result shows its fused score and its rank in each ranker (`vector #2 · keyword #1`).
 - **Retrieval** shows, per search (one per company when balanced), the top-k and the exact requests: the Chroma `collection.query` (collection, text that gets embedded, `n_results`, `where` filter) and the BM25 query (tokens, filter, corpus size).
-- Below the answer, every section is a collapsible header: **Retrieval** (collapsed), **passages sent to the LLM** (open, with tokens used of the budget; each passage is its own expander and the cited ones are open), **top-k passages not sent** (cut by the token budget) and **candidates not used** (ranked below top-k), with each one's vector/BM25 rank, cosine and BM25 scores, RRF score and token cost. Each `[n]` in the answer links to passage n and highlights it.
+- Below the answer, every section is a collapsible header, starts collapsed, and follows the pipeline: the **Retrieval** trace, **candidates not used** (ranked below top-k), **top-k passages not sent** (cut by the token budget), **passages sent to the LLM** (with tokens used of the budget; each passage is its own expander), each with vector/BM25 rank, cosine and BM25 scores, RRF score and token cost, then the **structured JSON**. Clicking a `[n]` in the answer opens the sections around passage n, scrolls to it and highlights it (a small fixed script in `app/ui.py`, `CITE_SCRIPT`, since browsers don't open a closed expander for a link inside it).
 - **Example questions** (collapsed above the question box) fill in the assignment's sample questions. With generation on, the page shows tokens sent/received, cost and LLM latency, the answer, key points with citations, any warnings, the structured JSON, and the numbered passages `[n]` the model saw. If generation fails (Ollama stopped, no API key), the error is shown and the passages are still displayed.
 - If the sidebar's Companies (or years…) contradict the question, a warning says which one is used; a company the question names that isn't in the collection is reported instead of silently searching everything.
 - The UI loads whichever collection the provider in `EMBEDDING_PROVIDER` can query, so start it with the same provider you built with.
@@ -271,7 +278,7 @@ tests/
 |---|---|
 | `test_chunking.py` | AAPL, TSLA, JPM: header metadata, noise removal, chunk size limit, offsets and coverage, known content present, determinism; header parsing, cleaning, calendar quarter |
 | `test_hybrid.py` | Tokenizer, BM25/vector/hybrid ranking with hand-set vectors (fusion, keyword-only and vector-only hits), filters in every mode incl. quarter, per-company balancing, blank query, empty store |
-| `test_ui.py` | Streamlit `AppTest`: generated answer, claims, JSON (no passage text), LLM-failure fallback, generation toggle, results and rank captions, sidebar filters, filters detected from the question (and sidebar override), balanced comparison, keyword mode, no-results warning, backend-down error |
+| `test_ui.py` | Streamlit `AppTest`: welcome screen and example prompts, chat history (earlier answers kept, unique citation anchors), new chat, regenerate, status badge, assistant steps, linked citations and opened cited passages, feedback, collapsible sections, tokens/cost/latency line, settings applied only on submit, model picker and per-model context defaults, sidebar and detected filters (conflicts, unindexed companies), balanced comparison, keyword mode, no-results and backend-down handling |
 | `test_qa.py` | Prompt loading (notes stripped for every version), context numbering and chunk ids, token-budget selection, validation per status (incl. off-topic), claim → chunk id/ticker resolution, `answer_question` with a scripted model |
 | `test_llm.py` | Structured-output retry/raise, Ollama request payload via mocked HTTP, OpenAI path with a fake client, provider selection |
 | `test_vectorstore.py` | Search ranking, `Filters` → Chroma `where` and the BM25 predicate (kept in sync), build/reload a collection, precomputed vectors, EmbeddingGemma prefixes and batching |
